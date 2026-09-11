@@ -24,8 +24,9 @@ asumiendo que ya existe. Sin este paso, GoTrue falla al arrancar con
 
 ## 2. GoTrue (Auth)
 
-Railway → **+ New → Docker Image** → `ghcr.io/supabase/gotrue:<tag>` (revisar
-el tag más reciente en https://github.com/supabase/auth/pkgs/container/gotrue).
+Railway → **+ New → Docker Image** → `ghcr.io/supabase/gotrue:v2.158.1` (tag
+fijado a propósito — versiones más nuevas como v2.180.0 tienen un bug conocido
+migrando contra una Postgres nueva, ver `infra/gotrue/gotrue.env.example`).
 
 Pegar las variables de `infra/gotrue/gotrue.env.example`, completando:
 - `GOTRUE_DB_DATABASE_URL` → referencia `${{Postgres.DATABASE_URL}}`

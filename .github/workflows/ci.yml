@@ -60,7 +60,7 @@ jobs:
             -e GOTRUE_JWT_ADMIN_ROLES=service_role \
             -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true \
             -e GOTRUE_MAILER_AUTOCONFIRM=true \
-            ghcr.io/supabase/gotrue:v2.180.0
+            ghcr.io/supabase/gotrue:v2.158.1
 
       - name: Esperar a que GoTrue esté listo
         run: |

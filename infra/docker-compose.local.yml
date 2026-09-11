@@ -23,7 +23,7 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d
 
   gotrue:
-    image: ghcr.io/supabase/gotrue:v2.180.0
+    image: ghcr.io/supabase/gotrue:v2.158.1
     depends_on:
       - postgres
     environment:
