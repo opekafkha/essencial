@@ -16,11 +16,19 @@ sin copiar/pegar).
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS auth;
+
+DO $$ BEGIN
+  CREATE TYPE auth.factor_type AS ENUM ();
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 ```
 
-GoTrue no crea este schema por sí solo — solo las tablas dentro de él,
+GoTrue no crea el schema `auth` por sí solo — solo las tablas dentro de él,
 asumiendo que ya existe. Sin este paso, GoTrue falla al arrancar con
-`schema "auth" does not exist`.
+`schema "auth" does not exist`. Lo del tipo `auth.factor_type` es un bug
+documentado de GoTrue (una migración interna asume que ese enum ya existe
+cuando en una base nueva nunca se crea solo — github.com/AppFlowy-IO/AppFlowy-Cloud#909).
 
 ## 2. GoTrue (Auth)
 

@@ -39,8 +39,14 @@ jobs:
       # asumiendo que ya existe. Hay que crearlo ANTES de arrancar GoTrue, por
       # eso no lo usamos como `services:` (arrancan todos en paralelo, sin
       # orden) y en cambio lo levantamos nosotros mismos después de este paso.
-      - name: Crear el schema "auth" antes de arrancar GoTrue
-        run: PGPASSWORD=postgres psql -h localhost -U postgres -d esencial -c 'CREATE SCHEMA IF NOT EXISTS auth;'
+      # También se precrea auth.factor_type vacío: una migración interna de
+      # GoTrue (add_mfa_phone_config) hace ALTER TYPE ... ADD VALUE 'phone'
+      # asumiendo que el enum ya existe, pero en runs nuevos nunca se crea
+      # solo (bug documentado, ver github.com/AppFlowy-IO/AppFlowy-Cloud#909).
+      - name: Crear schema "auth" y tipo auth.factor_type antes de arrancar GoTrue
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d esencial -c 'CREATE SCHEMA IF NOT EXISTS auth;'
+          PGPASSWORD=postgres psql -h localhost -U postgres -d esencial -c "DO \$\$ BEGIN CREATE TYPE auth.factor_type AS ENUM (); EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;"
 
       - name: Levantar GoTrue (crea auth.users al arrancar, ya con el schema listo)
         run: |
