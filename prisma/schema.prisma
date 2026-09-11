@@ -1,0 +1,139 @@
+// Fuente de verdad del esquema: prisma/migrations/*.sql (ya no supabase/migrations,
+// carpeta retirada). Cambios de schema van por `prisma migrate dev`.
+// Prisma 7: la URL de conexión ya no va aquí, vive en prisma.config.ts (para
+// Migrate/Studio) y en el adapter que arma src/lib/prisma.ts (para el cliente).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Rol {
+  miembro
+  profesional
+  admin
+
+  @@map("rol")
+}
+
+enum EstadoMembresia {
+  activa
+  inactiva
+
+  @@map("estado_membresia")
+}
+
+enum TipoMiembro {
+  titular
+  beneficiario
+
+  @@map("tipo_miembro")
+}
+
+enum EstadoInvitacion {
+  pendiente
+  aceptada
+  expirada
+  cancelada
+
+  @@map("estado_invitacion")
+}
+
+enum EstadoSala {
+  activa
+  expirada
+  cerrada
+
+  @@map("estado_sala")
+}
+
+enum ProveedorVideo {
+  daily
+
+  @@map("proveedor_video")
+}
+
+// Extiende auth.users (gestionada por Supabase, no está en este schema).
+model Profile {
+  id        String   @id @db.Uuid
+  email     String
+  nombre    String?
+  role      Rol      @default(miembro)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  membresiasComoTitular Membresia[]         @relation("TitularMembresia")
+  membresiaMiembros     MembresiaMiembro[]
+  invitacionesEnviadas  Invitacion[]        @relation("InvitedBy")
+  invitacionesAceptadas Invitacion[]        @relation("AcceptedBy")
+  videoRoomsCreadas     VideoRoom[]
+
+  @@map("profiles")
+}
+
+model Membresia {
+  id              String          @id @default(uuid()) @db.Uuid
+  titularUserId   String          @map("titular_user_id") @db.Uuid
+  estado          EstadoMembresia @default(activa)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @default(now()) @map("updated_at")
+
+  titular    Profile            @relation("TitularMembresia", fields: [titularUserId], references: [id])
+  miembros   MembresiaMiembro[]
+  invitaciones Invitacion[]
+
+  @@map("membresias")
+}
+
+model MembresiaMiembro {
+  id          String      @id @default(uuid()) @db.Uuid
+  membresiaId String      @map("membresia_id") @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  tipo        TipoMiembro
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  membresia Membresia @relation(fields: [membresiaId], references: [id])
+  user      Profile   @relation(fields: [userId], references: [id])
+
+  @@unique([membresiaId, userId])
+  @@map("membresia_miembros")
+}
+
+model Invitacion {
+  id              String           @id @default(uuid()) @db.Uuid
+  membresiaId     String           @map("membresia_id") @db.Uuid
+  emailInvitado   String           @map("email_invitado")
+  token           String           @unique
+  estado          EstadoInvitacion @default(pendiente)
+  fechaExpiracion DateTime         @map("fecha_expiracion")
+  invitedBy       String           @map("invited_by") @db.Uuid
+  acceptedBy      String?          @map("accepted_by") @db.Uuid
+  acceptedAt      DateTime?        @map("accepted_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  membresia         Membresia @relation(fields: [membresiaId], references: [id])
+  invitedByProfile  Profile   @relation("InvitedBy", fields: [invitedBy], references: [id])
+  acceptedByProfile Profile?  @relation("AcceptedBy", fields: [acceptedBy], references: [id])
+
+  @@map("invitaciones")
+}
+
+model VideoRoom {
+  id               String         @id @default(uuid()) @db.Uuid
+  slug             String         @unique
+  dailyRoomName    String         @map("daily_room_name")
+  dailyRoomUrl     String         @map("daily_room_url")
+  provider         ProveedorVideo @default(daily)
+  createdBy        String         @map("created_by") @db.Uuid
+  status           EstadoSala     @default(activa)
+  recordingEnabled Boolean        @default(false) @map("recording_enabled")
+  expiresAt        DateTime       @map("expires_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  creator Profile @relation(fields: [createdBy], references: [id])
+
+  @@map("video_rooms")
+}

@@ -1,0 +1,66 @@
+# Stack local para desarrollo: Postgres + GoTrue + MinIO, mismas imágenes que
+# infra/RUNBOOK.md usa en Railway. Uso:
+#
+#   docker compose -f infra/docker-compose.local.yml up -d
+#
+# Luego completar backend/.env con los valores de la sección "backend/.env"
+# más abajo, y correr `npm run prisma:migrate -w backend`.
+#
+# GOTRUE_JWT_SECRET acá es un valor fijo SOLO para desarrollo local — para
+# Railway generar uno real (ver infra/gotrue/gotrue.env.example).
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: esencial
+    ports:
+      - '5432:5432'
+    volumes:
+      - esencial_pgdata:/var/lib/postgresql/data
+
+  gotrue:
+    image: ghcr.io/supabase/gotrue:v2.180.0
+    depends_on:
+      - postgres
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://localhost:3001/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/esencial
+      GOTRUE_SITE_URL: http://localhost:5173
+      GOTRUE_URI_ALLOW_LIST: http://localhost:5173,http://localhost:3001
+      GOTRUE_DISABLE_SIGNUP: 'false'
+      GOTRUE_JWT_SECRET: local-dev-secret-do-not-use-in-production-32chars
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+    ports:
+      - '9999:9999'
+
+  minio:
+    image: minio/minio
+    command: server /data --address ":9000" --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - esencial_miniodata:/data
+
+volumes:
+  esencial_pgdata:
+  esencial_miniodata:
+
+# backend/.env para este stack local:
+#   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/esencial
+#   GOTRUE_URL=http://localhost:9999
+#   GOTRUE_JWT_SECRET=local-dev-secret-do-not-use-in-production-32chars
