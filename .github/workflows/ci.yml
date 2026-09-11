@@ -25,6 +25,25 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # La migración de Prisma referencia auth.users (tabla que crea GoTrue al
+      # arrancar) — sin este servicio, "schema auth does not exist" (P3018).
+      gotrue:
+        image: ghcr.io/supabase/gotrue:v2.180.0
+        env:
+          GOTRUE_API_HOST: 0.0.0.0
+          GOTRUE_API_PORT: 9999
+          API_EXTERNAL_URL: http://localhost:9999
+          GOTRUE_DB_DRIVER: postgres
+          # Entre servicios de GitHub Actions se usa el nombre del servicio
+          # como host (no localhost, eso es solo para el runner del job).
+          GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/esencial
+          GOTRUE_SITE_URL: http://localhost:3000
+          GOTRUE_DISABLE_SIGNUP: 'false'
+          GOTRUE_JWT_SECRET: ci-only-secret-not-for-production-min-32chars
+          GOTRUE_MAILER_AUTOCONFIRM: 'true'
+        ports:
+          - 9999:9999
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +53,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Esperar a que GoTrue esté listo (crea el schema auth al arrancar)
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9999/health && exit 0
+            sleep 2
+          done
+          echo "GoTrue no respondió a tiempo" >&2
+          exit 1
 
       - name: Aplicar migraciones de Prisma contra Postgres de CI
         run: npm run prisma:migrate:deploy
