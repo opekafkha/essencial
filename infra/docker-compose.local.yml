@@ -20,6 +20,7 @@ services:
       - '5432:5432'
     volumes:
       - esencial_pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
 
   gotrue:
     image: ghcr.io/supabase/gotrue:v2.180.0

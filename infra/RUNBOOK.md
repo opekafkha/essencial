@@ -11,6 +11,17 @@ Railway → **+ New → Database → PostgreSQL** (plugin gestionado, no imagen
 Docker cruda — genera `DATABASE_URL` referenciable por los demás servicios
 sin copiar/pegar).
 
+**Antes de crear el servicio de GoTrue** (paso 2), conéctate a esta Postgres
+(pestaña "Data" de Railway, o `psql` con la connection string) y corre:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS auth;
+```
+
+GoTrue no crea este schema por sí solo — solo las tablas dentro de él,
+asumiendo que ya existe. Sin este paso, GoTrue falla al arrancar con
+`schema "auth" does not exist`.
+
 ## 2. GoTrue (Auth)
 
 Railway → **+ New → Docker Image** → `ghcr.io/supabase/gotrue:<tag>` (revisar
@@ -39,14 +50,14 @@ servicio queda listo para cuando se necesite.
 
 ## 4. Backend
 
-Railway → **+ New → GitHub Repo** → seleccionar este repo.
+Railway → **+ New → GitHub Repo** → seleccionar el repo del backend (repo
+aparte del de `apps/web`/`apps/desktop`).
 
-- **Root Directory**: la raíz del repo (no `backend/`) — es un monorepo npm
-  workspaces, `npm ci` necesita ver el `package.json` raíz para resolver el
-  link a `@esencial/shared`.
-- **Build Command**: `npm run build -w packages/shared && npm run build -w backend`
-- **Start Command**: `npm run start -w backend`
-- Variables (ver `backend/.env.example`):
+- **Root Directory**: la raíz del repo (default) — este repo ya es solo el
+  backend, sin nada de frontend.
+- **Build Command**: `npm run build`
+- **Start Command**: `npm run start`
+- Variables (ver `.env.example`):
   - `DATABASE_URL` → `${{Postgres.DATABASE_URL}}`
   - `GOTRUE_URL` → URL interna de Railway del servicio GoTrue del paso 2
     (ej. `http://<nombre-servicio-gotrue>.railway.internal:9999`)
@@ -58,10 +69,10 @@ Railway → **+ New → GitHub Repo** → seleccionar este repo.
 Una vez tenga dominio, volver al paso 2 y actualizar `API_EXTERNAL_URL` /
 `GOTRUE_SITE_URL` con las URLs reales de backend y web.
 
-## 5. Frontend (local)
+## 5. Frontend (repo aparte)
 
-Actualizar `apps/web/.env` y `apps/desktop/.env` (copiar de sus
-`.env.example`):
+En el repo de `apps` (`apps/web`/`apps/desktop`), actualizar sus `.env`
+(copiar de sus `.env.example`):
 - `VITE_SUPABASE_URL` y `VITE_BACKEND_URL` → dominio público del backend
   (paso 4)
 - `VITE_SUPABASE_ANON_KEY` → dejar el placeholder, no tiene función de
@@ -70,10 +81,10 @@ Actualizar `apps/web/.env` y `apps/desktop/.env` (copiar de sus
 ## 6. (Opcional) Seed de usuarios de prueba
 
 ```
-tsx backend/scripts/mint-service-role-jwt.ts <GOTRUE_JWT_SECRET>
+tsx scripts/mint-service-role-jwt.ts <GOTRUE_JWT_SECRET>
 ```
 
-Copiar el JWT resultante a `backend/scripts/.env` (`SERVICE_ROLE_JWT`, ver
+Copiar el JWT resultante a `scripts/.env` (`SERVICE_ROLE_JWT`, ver
 `.env.example`), junto con `BACKEND_URL`, y correr:
 
 ```

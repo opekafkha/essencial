@@ -25,34 +25,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # La migración de Prisma referencia auth.users (tabla que crea GoTrue al
-      # arrancar) — sin este servicio, "schema auth does not exist" (P3018).
-      gotrue:
-        image: ghcr.io/supabase/gotrue:v2.180.0
-        env:
-          GOTRUE_API_HOST: 0.0.0.0
-          GOTRUE_API_PORT: 9999
-          API_EXTERNAL_URL: http://localhost:9999
-          GOTRUE_DB_DRIVER: postgres
-          # Entre servicios de GitHub Actions se usa el nombre del servicio
-          # como host (no localhost, eso es solo para el runner del job).
-          # sslmode=disable: el Postgres de este servicio no tiene TLS
-          # configurado, y GoTrue (pgx) puede colgarse intentando negociar SSL
-          # si no se lo desactivamos explícito.
-          GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/esencial?sslmode=disable
-          GOTRUE_SITE_URL: http://localhost:3000
-          GOTRUE_URI_ALLOW_LIST: http://localhost:3000
-          GOTRUE_DISABLE_SIGNUP: 'false'
-          GOTRUE_JWT_SECRET: ci-only-secret-not-for-production-min-32chars
-          GOTRUE_JWT_EXP: 3600
-          GOTRUE_JWT_AUD: authenticated
-          GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
-          GOTRUE_JWT_ADMIN_ROLES: service_role
-          GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
-          GOTRUE_MAILER_AUTOCONFIRM: 'true'
-        ports:
-          - 9999:9999
-
     steps:
       - uses: actions/checkout@v4
 
@@ -63,15 +35,41 @@ jobs:
 
       - run: npm ci
 
-      - name: Esperar a que GoTrue esté listo (crea el schema auth al arrancar)
+      # GoTrue no crea el schema "auth" — solo las tablas dentro de él,
+      # asumiendo que ya existe. Hay que crearlo ANTES de arrancar GoTrue, por
+      # eso no lo usamos como `services:` (arrancan todos en paralelo, sin
+      # orden) y en cambio lo levantamos nosotros mismos después de este paso.
+      - name: Crear el schema "auth" antes de arrancar GoTrue
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d esencial -c 'CREATE SCHEMA IF NOT EXISTS auth;'
+
+      - name: Levantar GoTrue (crea auth.users al arrancar, ya con el schema listo)
+        run: |
+          docker run -d --name gotrue --network host \
+            -e GOTRUE_API_HOST=0.0.0.0 \
+            -e GOTRUE_API_PORT=9999 \
+            -e API_EXTERNAL_URL=http://localhost:9999 \
+            -e GOTRUE_DB_DRIVER=postgres \
+            -e GOTRUE_DB_DATABASE_URL='postgres://postgres:postgres@localhost:5432/esencial?sslmode=disable' \
+            -e GOTRUE_SITE_URL=http://localhost:3000 \
+            -e GOTRUE_URI_ALLOW_LIST=http://localhost:3000 \
+            -e GOTRUE_DISABLE_SIGNUP=false \
+            -e GOTRUE_JWT_SECRET=ci-only-secret-not-for-production-min-32chars \
+            -e GOTRUE_JWT_EXP=3600 \
+            -e GOTRUE_JWT_AUD=authenticated \
+            -e GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated \
+            -e GOTRUE_JWT_ADMIN_ROLES=service_role \
+            -e GOTRUE_EXTERNAL_EMAIL_ENABLED=true \
+            -e GOTRUE_MAILER_AUTOCONFIRM=true \
+            ghcr.io/supabase/gotrue:v2.180.0
+
+      - name: Esperar a que GoTrue esté listo
         run: |
           for i in $(seq 1 30); do
             curl -sf http://localhost:9999/health && exit 0
             sleep 2
           done
           echo "GoTrue no respondió a tiempo — logs del contenedor:" >&2
-          docker ps -a --filter "ancestor=ghcr.io/supabase/gotrue:v2.180.0" --format '{{.ID}}' \
-            | xargs -r -I{} docker logs {}
+          docker logs gotrue
           exit 1
 
       - name: Aplicar migraciones de Prisma contra Postgres de CI
