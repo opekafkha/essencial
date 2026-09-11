@@ -36,10 +36,19 @@ jobs:
           GOTRUE_DB_DRIVER: postgres
           # Entre servicios de GitHub Actions se usa el nombre del servicio
           # como host (no localhost, eso es solo para el runner del job).
-          GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/esencial
+          # sslmode=disable: el Postgres de este servicio no tiene TLS
+          # configurado, y GoTrue (pgx) puede colgarse intentando negociar SSL
+          # si no se lo desactivamos explícito.
+          GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/esencial?sslmode=disable
           GOTRUE_SITE_URL: http://localhost:3000
+          GOTRUE_URI_ALLOW_LIST: http://localhost:3000
           GOTRUE_DISABLE_SIGNUP: 'false'
           GOTRUE_JWT_SECRET: ci-only-secret-not-for-production-min-32chars
+          GOTRUE_JWT_EXP: 3600
+          GOTRUE_JWT_AUD: authenticated
+          GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+          GOTRUE_JWT_ADMIN_ROLES: service_role
+          GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
           GOTRUE_MAILER_AUTOCONFIRM: 'true'
         ports:
           - 9999:9999
@@ -60,7 +69,9 @@ jobs:
             curl -sf http://localhost:9999/health && exit 0
             sleep 2
           done
-          echo "GoTrue no respondió a tiempo" >&2
+          echo "GoTrue no respondió a tiempo — logs del contenedor:" >&2
+          docker ps -a --filter "ancestor=ghcr.io/supabase/gotrue:v2.180.0" --format '{{.ID}}' \
+            | xargs -r -I{} docker logs {}
           exit 1
 
       - name: Aplicar migraciones de Prisma contra Postgres de CI
